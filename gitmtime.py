@@ -251,14 +251,11 @@ def main(argv):
   print "QuickFlag = %d" % (QuickFlag)
   
   if UpdateFlag:
-    if GitFlag == True:
-      sobj = GitFolderClass()
-      if ClearMTimeFlag == False and "FDB" in ConfigData:
-        sobj.FileDatabase = ConfigData['FDB']
-      sobj.UpdateMTime (QuickFlag)
-      ConfigData['FDB'] = sobj.FileDatabase
-    else:
-      print "Error: --ut doesn't support SVN"
+    sobj = GitFolderClass()
+    if ClearMTimeFlag == False and "FDB" in ConfigData:
+      sobj.FileDatabase = ConfigData['FDB']
+    sobj.UpdateMTime (QuickFlag)
+    ConfigData['FDB'] = sobj.FileDatabase
   
   SaveConfig()
     
