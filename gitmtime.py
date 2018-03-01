@@ -92,7 +92,17 @@ def WriteArrayToFile(fn, lines):
 
 def GetFileExtension(fn):  
   return os.path.splitext(fn)[1]
-  
+
+def GetFileSha1 (fn):
+  sha1 = hashlib.sha1()
+  with open(fn, 'rb') as f:
+    while True:
+      data = f.read(BUF_SIZE)
+      if not data:
+          break
+      sha1.update(data)
+  return sha1.hexdigest()
+
 #------------------------------------------------------------------------------
 # GIT Functions
 #------------------------------------------------------------------------------
