@@ -16,6 +16,8 @@ VerboseFlag = False
 ConfigFile = "gitmtime.cfg"
 ConfigData = {}
 BUF_SIZE = 65536  # lets read stuff in 64kb chunks!
+FLAG_QUICK  = 1
+FLAG_CFG    = 2
 
 #------------------------------------------------------------------------------
 # Common Functions
@@ -149,21 +151,40 @@ class GitFolderClass:
       print "Info: Update mtime of [%s] to [%s]" % (fn, iso_time)
     logging.info('Update mtime of [%s] to [%s]' % (fn, iso_time))
         
-  def UpdateMTime(self, qflag):
+  def GetFileListFromGIT(self):
     status, result = Exec("git ls-files")
     if status == 0:
-      lines = result.split("\n")
-      for line in lines:
-        fn = line.strip()
+      flist = result.split("\n")
+    else:
+      flist = False
+    return flist
+  
+  def GetFileListFromCFG(self):     # LocalDatabase
+    flist = []
+    for fn, fninfo in self.FileDatabase.iteritems():
+      flist.append(fn)
+    return flist
+    
+  def UpdateMTime(self, flags):
+    if flags & FLAG_CFG:
+      flist = self.GetFileListFromCFG()
+    else:
+      flist = self.GetFileListFromGIT()
+    
+    if flist != False:
+      for fn in flist:
+        fn = fn.strip()
         if not fn: 
           continue
         if os.path.isfile(fn) == False:
-          print "Error: file not found [%s]" % (fn)
+          print "Info: file not found [%s]" % (fn)
           continue
         finfo = self.GetFInfoFromDatabase(fn) 
-        if finfo == False:                      # No record in database
-          if qflag:
-            mtime = self.GetMTimeFromFile (fn)     # Get mtime from File (Quick Mode)
+        if finfo == False:                        # No record in database
+          if flags & FLAG_QUICK:
+            mtime = self.GetMTimeFromFile (fn)    # Get mtime from File (Quick Mode)
+          elif flags & FLAG_CFG:
+            mtime = False
           else:
             mtime = self.GetMTimeFromGit (fn)     # Get mtime from GIT
           if mtime != False:
@@ -179,6 +200,8 @@ class GitFolderClass:
             sha1 = GetFileSha1(fn)
             if sha1 == finfo['sha1']:           # sha1 is same, update mtime to file
               self.UpdateFileMTime (fn, finfo['mtime'])
+            elif flags & FLAG_CFG:
+              mtime = False
             else:                               # sha1 is diff, get mtime from GIT
               mtime = self.GetMTimeFromGit (fn)
               if mtime != False:
@@ -187,7 +210,7 @@ class GitFolderClass:
                 finfo['size'] = os.stat(fn).st_size  
                 finfo['sha1'] = sha1
                 self.FileDatabase[fn] = finfo
-          
+                
 #------------------------------------------------------------------------------
 # Config Functions
 #------------------------------------------------------------------------------
@@ -215,6 +238,7 @@ def Usage():
     print '   -u        Update database and mtime of all files'
     print '   -c        Empty database for rebuild'
     print '   -q        Quick mode, Use Local File System for rebuild'
+    print '   --cfg     Config File Only'    
     print '   -t        Test'
     print '   -v        Verbose'
 
@@ -226,12 +250,12 @@ def main(argv):
   SpaceFlag = False
   UpdateFlag = False
   ClearMTimeFlag = False
-  QuickFlag = False
+  Flags = 0
   
   logging.basicConfig(filename='gitmtime.log', level=logging.INFO)
     
   try:
-    opts, args = getopt.getopt(argv,"ucqvh",["help"])
+    opts, args = getopt.getopt(argv,"ucqvh",["help", "cfg"])
   except getopt.GetoptError:
     Usage()
     sys.exit(2)
@@ -244,7 +268,9 @@ def main(argv):
     elif opt == "-c":                 # Clear modified time database
       ClearMTimeFlag = True
     elif opt == "-q":                 # Quick Flag for rebuild
-      QuickFlag = True
+      Flags = Flags | FLAG_QUICK
+    elif opt == "--cfg":              # Config File Only mode
+      Flags = Flags | FLAG_CFG
     elif opt == "-v":                 # Verbose Flag
       VerboseFlag = True
   
@@ -258,13 +284,13 @@ def main(argv):
 
   LoadConfig()
 
-  print "QuickFlag = %d" % (QuickFlag)
+  print "Flags = 0x%X" % (Flags)
   
   if UpdateFlag:
     sobj = GitFolderClass()
     if ClearMTimeFlag == False and "FDB" in ConfigData:
       sobj.FileDatabase = ConfigData['FDB']
-    sobj.UpdateMTime (QuickFlag)
+    sobj.UpdateMTime (Flags)
     ConfigData['FDB'] = sobj.FileDatabase
   
   SaveConfig()
